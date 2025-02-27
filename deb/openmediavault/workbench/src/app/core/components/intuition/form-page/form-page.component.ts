@@ -3,7 +3,7 @@
  *
  * @license   http://www.gnu.org/licenses/gpl.html GPL Version 3
  * @author    Volker Theile <volker.theile@openmediavault.org>
- * @copyright Copyright (c) 2009-2022 Volker Theile
+ * @copyright Copyright (c) 2009-2025 Volker Theile
  *
  * OpenMediaVault is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,33 +16,38 @@
  * GNU General Public License for more details.
  */
 import { HttpErrorResponse } from '@angular/common/http';
-import { AfterViewInit, Component, Inject, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { AfterViewInit, Component, Inject, OnInit, ViewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { marker as gettext } from '@biesbjerg/ngx-translate-extract-marker';
+import { marker as gettext } from '@ngneat/transloco-keys-manager/marker';
 import * as _ from 'lodash';
-import { BlockUI, NgBlockUI } from 'ng-block-ui';
 import { EMPTY, Subscription } from 'rxjs';
-import { catchError, finalize } from 'rxjs/operators';
+import { catchError, debounceTime, finalize } from 'rxjs/operators';
 
 import { AbstractPageComponent } from '~/app/core/components/intuition/abstract-page-component';
 import { FormComponent } from '~/app/core/components/intuition/form/form.component';
 import {
   flattenFormFieldConfig,
+  formatFormFieldConfig,
   setupConfObjUuidFields
 } from '~/app/core/components/intuition/functions.helper';
+import { FormFieldName } from '~/app/core/components/intuition/models/form.type';
+import { FormValues } from '~/app/core/components/intuition/models/form.type';
 import { FormFieldConfig } from '~/app/core/components/intuition/models/form-field-config.type';
 import {
   FormPageButtonConfig,
   FormPageConfig
 } from '~/app/core/components/intuition/models/form-page-config.type';
+import { PageContextService } from '~/app/core/services/page-context.service';
+import { Unsubscribe } from '~/app/decorators';
 import { format, formatDeep, isFormatable, toBoolean } from '~/app/functions.helper';
 import { translate } from '~/app/i18n.helper';
 import { ModalDialogComponent } from '~/app/shared/components/modal-dialog/modal-dialog.component';
 import { TaskDialogComponent } from '~/app/shared/components/task-dialog/task-dialog.component';
 import { Icon } from '~/app/shared/enum/icon.enum';
 import { NotificationType } from '~/app/shared/enum/notification-type.enum';
+import { Dirty } from '~/app/shared/models/dirty.interface';
 import { RpcObjectResponse } from '~/app/shared/models/rpc.model';
-import { AuthSessionService } from '~/app/shared/services/auth-session.service';
+import { BlockUiService } from '~/app/shared/services/block-ui.service';
 import { ConstraintService } from '~/app/shared/services/constraint.service';
 import { DialogService } from '~/app/shared/services/dialog.service';
 import { NotificationService } from '~/app/shared/services/notification.service';
@@ -50,41 +55,40 @@ import { RpcService } from '~/app/shared/services/rpc.service';
 
 /**
  * This component will render a page containing a form with the
- * configured form fields. By default this page contains a 'Save'
+ * configured form fields. By default, this page contains a 'Save'
  * and 'Cancel' button. The 'Save' button is enabled when the form
  * is dirty and the form validation was successfully.
  */
 @Component({
   selector: 'omv-intuition-form-page',
   templateUrl: './form-page.component.html',
-  styleUrls: ['./form-page.component.scss']
+  styleUrls: ['./form-page.component.scss'],
+  providers: [PageContextService]
 })
 export class FormPageComponent
   extends AbstractPageComponent<FormPageConfig>
-  implements AfterViewInit, OnInit, OnDestroy
+  implements AfterViewInit, OnInit, Dirty
 {
-  @BlockUI()
-  blockUI: NgBlockUI;
-
   @ViewChild(FormComponent, { static: true })
   form: FormComponent;
 
+  @Unsubscribe()
+  private subscriptions = new Subscription();
+
   // Internal
-  public editing = false;
   public loading = false;
   public error: HttpErrorResponse;
 
-  private subscriptions = new Subscription();
-
   constructor(
-    @Inject(ActivatedRoute) activatedRoute: ActivatedRoute,
-    @Inject(AuthSessionService) authSessionService: AuthSessionService,
+    @Inject(PageContextService) pageContextService: PageContextService,
+    private activatedRoute: ActivatedRoute,
+    private blockUiService: BlockUiService,
     private router: Router,
     private rpcService: RpcService,
     private dialogService: DialogService,
     private notificationService: NotificationService
   ) {
-    super(activatedRoute, authSessionService);
+    super(pageContextService);
     // Set the form mode to 'Create' (default) or 'Edit'.
     // This depends on the component configuration that is done via the
     // router config.
@@ -99,43 +103,30 @@ export class FormPageComponent
     //   component: DiskFormPageComponent,
     //   data: { title: gettext('Edit'), editing: true }
     // }
-    this.editing = _.get(this.routeConfig, 'data.editing', false);
+    this.pageContextService.set({
+      _editing: _.get(this.pageContext._routeConfig, 'data.editing', false)
+    });
   }
 
-  ngOnInit(): void {
+  override ngOnInit(): void {
     super.ngOnInit();
-    // Flatten all form field configurations into an array to be able to
-    // iterate over them easily.
-    const allFields = flattenFormFieldConfig(this.config.fields);
-    // Process the 'disabled' attribute in all form field configurations.
-    _.forEach(allFields, (fieldConfig: FormFieldConfig) => {
-      if (_.has(fieldConfig, 'disabled') && isFormatable(fieldConfig.disabled)) {
-        fieldConfig.disabled = toBoolean(format(String(fieldConfig.disabled), this.pageContext));
-      }
-    });
-    // Process the 'required' validator in all form field configurations.
-    _.forEach(allFields, (fieldConfig: FormFieldConfig) => {
-      if (
-        _.has(fieldConfig, 'validators.required') &&
-        isFormatable(fieldConfig.validators.required)
-      ) {
-        fieldConfig.validators.required = toBoolean(
-          format(String(fieldConfig.validators.required), this.pageContext)
-        );
-      }
-    });
+    // Note, the following properties need to be handled before the function
+    // `FormComponent::createForm` is called.
+    const allFields: FormFieldConfig[] = flattenFormFieldConfig(this.config.fields);
+    formatFormFieldConfig(
+      allFields,
+      this.pageContext,
+      ['disabled', 'validators.required'],
+      toBoolean
+    );
   }
 
-  ngOnDestroy(): void {
-    this.subscriptions.unsubscribe();
-  }
-
-  ngAfterViewInit(): void {
+  override ngAfterViewInit(): void {
     super.ngAfterViewInit();
     // Process all specified constraints per button.
     if (_.some(this.config.buttons, (button) => _.isPlainObject(button.enabledConstraint))) {
       this.subscriptions.add(
-        this.form.formGroup.valueChanges.subscribe((values: Record<any, any>) => {
+        this.form.formGroup.valueChanges.pipe(debounceTime(5)).subscribe((values: FormValues) => {
           _.forEach(this.config.buttons, (button) => {
             if (_.isPlainObject(button.enabledConstraint)) {
               button.disabled = !ConstraintService.test(button.enabledConstraint, values);
@@ -146,9 +137,27 @@ export class FormPageComponent
     }
   }
 
+  isDirty(): boolean {
+    return this.form.formGroup.dirty;
+  }
+
+  markAsDirty(): void {
+    this.form.formGroup.markAsDirty();
+  }
+
+  markAsPristine(): void {
+    this.form.formGroup.markAsPristine();
+  }
+
   loadData(): void {
     const request = this.config.request;
     if (_.isString(request?.service) && _.isPlainObject(request?.get)) {
+      if (_.isString(request.get.onlyIf)) {
+        const result: string = format(request.get.onlyIf, this.pageContext);
+        if (false === toBoolean(result)) {
+          return;
+        }
+      }
       this.loading = true;
       // noinspection DuplicatedCode
       this.rpcService[request.get.task ? 'requestTask' : 'request'](
@@ -188,11 +197,15 @@ export class FormPageComponent
 
   /**
    * Sets the form values.
+   *
+   * @param values The values to be set.
+   * @param markAsPristine Mark the form as pristine after patching the
+   *   values. Defaults to `true`.
    */
-  setFormValues(values: Record<string, any>, markAsPristine = true): void {
+  setFormValues(values: FormValues, markAsPristine = true): void {
     this.form.formGroup.patchValue(values);
     if (markAsPristine) {
-      this.form.formGroup.markAsPristine();
+      this.markAsPristine();
     }
   }
 
@@ -202,20 +215,23 @@ export class FormPageComponent
    *
    * @return Returns an object containing the form field values.
    */
-  getFormValues(): Record<string, any> {
-    const allFields = flattenFormFieldConfig(this.config.fields);
-    const values = _.pickBy(this.form.formGroup.getRawValue(), (value, key) => {
-      const field = _.find(allFields, { name: key });
-      if (_.isUndefined(field)) {
-        return true;
+  getFormValues(): FormValues {
+    const allFields: FormFieldConfig[] = flattenFormFieldConfig(this.config.fields);
+    const values: FormValues = _.pickBy(
+      this.form.formGroup.getRawValue(),
+      (value: any, key: FormFieldName) => {
+        const field = _.find(allFields, { name: key });
+        if (_.isUndefined(field)) {
+          return true;
+        }
+        return _.defaultTo(field.submitValue, true);
       }
-      return _.defaultTo(field.submitValue, true);
-    });
+    );
     return values;
   }
 
   onButtonClick(buttonConfig: FormPageButtonConfig) {
-    let values = this.getFormValues();
+    let values: FormValues = this.getFormValues();
     // Closure that handles the button action.
     const doButtonActionFn = () => {
       switch (buttonConfig?.execute?.type) {
@@ -229,13 +245,13 @@ export class FormPageComponent
           // Check if there is a return URL specified. This will override the configured URL.
           const returnUrl = _.get(this.activatedRoute.snapshot.queryParams, 'returnUrl');
           if (_.isString(returnUrl)) {
-            this.router.navigate([returnUrl]);
+            this.router.navigateByUrl(returnUrl);
             break;
           }
           if (_.isString(buttonConfig.execute.url)) {
             // Navigate to the specified URL.
             const url = format(buttonConfig.execute.url, _.merge({}, values, this.pageContext));
-            this.router.navigate([url]);
+            this.router.navigateByUrl(url);
           }
           break;
         case 'request':
@@ -243,7 +259,7 @@ export class FormPageComponent
             // Execute the specified request.
             const request = buttonConfig.execute.request;
             if (_.isString(request.progressMessage)) {
-              this.blockUI.start(translate(request.progressMessage));
+              this.blockUiService.start(translate(request.progressMessage));
             }
             this.rpcService[request.task ? 'requestTask' : 'request'](
               request.service,
@@ -253,7 +269,7 @@ export class FormPageComponent
               .pipe(
                 finalize(() => {
                   if (_.isString(request.progressMessage)) {
-                    this.blockUI.stop();
+                    this.blockUiService.stop();
                   }
                 })
               )
@@ -262,9 +278,10 @@ export class FormPageComponent
                 if (_.isString(request.successNotification)) {
                   this.notificationService.show(
                     NotificationType.success,
+                    undefined,
                     format(
                       request.successNotification,
-                      _.merge({ _response: res }, this.pageContext, values)
+                      _.merge({ _response: res }, values, this.pageContext)
                     )
                   );
                 }
@@ -272,9 +289,9 @@ export class FormPageComponent
                 if (_.isString(request.successUrl)) {
                   const url = format(
                     request.successUrl,
-                    _.merge({ _response: res }, this.pageContext, values)
+                    _.merge({ _response: res }, values, this.pageContext)
                   );
-                  this.router.navigate([url]);
+                  this.router.navigateByUrl(url);
                 }
               });
           }
@@ -298,9 +315,9 @@ export class FormPageComponent
           });
           // Navigate to the specified URL if pressed button returns `true`.
           dialog.afterClosed().subscribe((res) => {
-            if (res && taskDialog.successUrl) {
+            if (res && _.isString(taskDialog.successUrl)) {
               const url = format(taskDialog.successUrl, _.merge({}, values, this.pageContext));
-              this.router.navigate([url]);
+              this.router.navigateByUrl(url);
             }
           });
           break;
@@ -347,11 +364,11 @@ export class FormPageComponent
             values = tmp;
           }
           if (_.isString(request.post.progressMessage)) {
-            this.blockUI.start(translate(request.post.progressMessage));
+            this.blockUiService.start(translate(request.post.progressMessage));
           } else {
             // Show a default progress message because the RPC might
             // take some while.
-            this.blockUI.start(translate(gettext('Please wait ...')));
+            this.blockUiService.start(translate(gettext('Please wait ...')));
           }
           this.rpcService[request.post.task ? 'requestTask' : 'request'](
             request.service,
@@ -360,20 +377,24 @@ export class FormPageComponent
           )
             .pipe(
               finalize(() => {
-                this.blockUI.stop();
+                this.blockUiService.stop();
               })
             )
             .subscribe(() => {
               // At this point we can assume the form values have been
               // submitted and stored, so we can safely mark the form as
               // pristine again.
-              this.form.formGroup.markAsPristine();
+              this.markAsPristine();
               // Display a success notification?
-              const notificationTitle = _.get(this.routeConfig, 'data.notificationTitle');
+              const notificationTitle = _.get(
+                this.pageContext._routeConfig,
+                'data.notificationTitle'
+              );
               if (!_.isEmpty(notificationTitle)) {
                 this.notificationService.show(
                   NotificationType.success,
-                  format(notificationTitle, _.merge({}, this.pageContext, values))
+                  undefined,
+                  format(notificationTitle, _.merge({}, values, this.pageContext))
                 );
               }
               doPreButtonActionFn();
@@ -383,7 +404,7 @@ export class FormPageComponent
         if (_.isPlainObject(request.post.confirmationDialogConfig)) {
           const data = _.cloneDeep(request.post.confirmationDialogConfig);
           if (_.isString(data.message)) {
-            data.message = format(data.message, values);
+            data.message = format(data.message, _.merge({}, values, this.pageContext));
           }
           const dialogRef = this.dialogService.open(ModalDialogComponent, {
             width: _.get(data, 'width'),
@@ -399,23 +420,7 @@ export class FormPageComponent
           doRpcRequestFn();
         }
       } else {
-        doPreButtonActionFn();
-      }
-    } else if ('cancel' === buttonConfig.template) {
-      // Process 'Cancel' buttons.
-      if (this.form.formGroup.dirty) {
-        const dialogRef = this.dialogService.open(ModalDialogComponent, {
-          data: {
-            template: 'confirmation-danger',
-            message: gettext('Your changes will be lost. Do you want to continue?')
-          }
-        });
-        dialogRef.afterClosed().subscribe((res: any) => {
-          if (true === res) {
-            doPreButtonActionFn();
-          }
-        });
-      } else {
+        this.markAsPristine();
         doPreButtonActionFn();
       }
     } else {
@@ -423,11 +428,13 @@ export class FormPageComponent
     }
   }
 
-  protected sanitizeConfig() {
+  protected override sanitizeConfig() {
     _.defaultsDeep(this.config, {
       buttonAlign: 'end',
       buttons: []
     });
+    // Set the default hint properties.
+    this.sanitizeHintsConfig();
     // Populate the datamodel identifier field. This must be done here
     // in addition to the `FormComponent`, since the form has not yet
     // been initialized at this point in time and the fields have
@@ -469,23 +476,26 @@ export class FormPageComponent
     this.config.icon = _.get(Icon, this.config.icon, this.config.icon);
   }
 
-  protected onRouteParams() {
-    const allFields = flattenFormFieldConfig(this.config.fields);
+  protected override onPageInit() {
     // Format tokenized configuration properties.
-    this.formatConfig(['title', 'subTitle', 'request.get.method', 'request.get.params']);
+    this.formatConfig([
+      'request.get.method',
+      'request.get.params',
+      'request.post.method',
+      'request.post.params'
+    ]);
     // Load the content if form page is in 'editing' mode.
-    if (this.editing) {
+    if (this.pageContext._editing) {
       this.loadData();
-    }
-    // Inject route configuration and parameters into various form field
-    // configuration properties.
-    _.forEach(allFields, (fieldConfig: FormFieldConfig) => {
-      _.forEach(['store.proxy', 'store.filters', 'value', 'request.params'], (path) => {
-        const value = _.get(fieldConfig, path);
-        if (isFormatable(value)) {
-          _.set(fieldConfig, path, formatDeep(value, this.pageContext));
+    } else {
+      // Inject the query parameters of the route into the form fields.
+      // This will override the configured form field values.
+      const allFields: FormFieldConfig[] = flattenFormFieldConfig(this.config.fields);
+      _.forEach(allFields, (fieldConfig: FormFieldConfig) => {
+        if (_.has(this.pageContext._routeQueryParams, fieldConfig.name)) {
+          fieldConfig.value = _.get(this.pageContext._routeQueryParams, fieldConfig.name);
         }
       });
-    });
+    }
   }
 }

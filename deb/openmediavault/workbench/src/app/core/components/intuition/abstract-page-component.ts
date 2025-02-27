@@ -3,7 +3,7 @@
  *
  * @license   http://www.gnu.org/licenses/gpl.html GPL Version 3
  * @author    Volker Theile <volker.theile@openmediavault.org>
- * @copyright Copyright (c) 2009-2022 Volker Theile
+ * @copyright Copyright (c) 2009-2025 Volker Theile
  *
  * OpenMediaVault is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,27 +15,17 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
-import {
-  AfterViewInit,
-  Directive,
-  EventEmitter,
-  Input,
-  OnDestroy,
-  OnInit,
-  Output
-} from '@angular/core';
-import { ActivatedRoute, ParamMap, Route } from '@angular/router';
+import { AfterViewInit, Directive, EventEmitter, Input, OnInit, Output } from '@angular/core';
 import * as _ from 'lodash';
-import { Subscription } from 'rxjs';
 
-import { decodeURIComponentDeep, formatDeep, isFormatable } from '~/app/functions.helper';
-import { AuthSessionService } from '~/app/shared/services/auth-session.service';
-
-export type PageContext = Record<string, any>;
+import { PageHintConfig } from '~/app/core/components/intuition/models/page-config.type';
+import { PageContext } from '~/app/core/models/page-context.type';
+import { PageContextService } from '~/app/core/services/page-context.service';
+import { formatDeep, isFormatable } from '~/app/functions.helper';
 
 @Directive()
 // eslint-disable-next-line @angular-eslint/directive-class-suffix
-export abstract class AbstractPageComponent<T> implements AfterViewInit, OnInit, OnDestroy {
+export abstract class AbstractPageComponent<T> implements AfterViewInit, OnInit {
   @Input()
   config: T;
 
@@ -43,18 +33,10 @@ export abstract class AbstractPageComponent<T> implements AfterViewInit, OnInit,
   @Output()
   readonly afterViewInitEvent = new EventEmitter();
 
-  readonly routeConfig: Route;
-  routeParams: Record<string, any> = {};
-  private activatedRouteSubscription: Subscription;
-
-  protected constructor(
-    protected activatedRoute: ActivatedRoute,
-    protected authSessionService: AuthSessionService
-  ) {
-    this.routeConfig = this.activatedRoute.routeConfig;
+  protected constructor(protected pageContextService: PageContextService) {
     // Is the component configured via route data?
-    if (_.has(this.routeConfig, 'data.config')) {
-      this.config = _.cloneDeep(_.get(this.routeConfig, 'data.config'));
+    if (_.has(this.pageContext._routeConfig, 'data.config')) {
+      this.config = _.cloneDeep(_.get(this.pageContext._routeConfig, 'data.config')) as T;
     }
   }
 
@@ -65,26 +47,12 @@ export abstract class AbstractPageComponent<T> implements AfterViewInit, OnInit,
    * property names start with underscores.
    */
   get pageContext(): PageContext {
-    return {
-      _session: {
-        username: this.authSessionService.getUsername(),
-        permissions: this.authSessionService.getPermissions()
-      },
-      _routeConfig: this.routeConfig,
-      _routeParams: this.routeParams
-    };
+    return this.pageContextService.get();
   }
 
   ngOnInit(): void {
     this.sanitizeConfig();
-    this.activatedRouteSubscription = this.activatedRoute.params.subscribe((params: ParamMap) => {
-      this.routeParams = decodeURIComponentDeep(params);
-      this.onRouteParams();
-    });
-  }
-
-  ngOnDestroy(): void {
-    this.activatedRouteSubscription?.unsubscribe();
+    this.onPageInit();
   }
 
   ngAfterViewInit(): void {
@@ -95,24 +63,36 @@ export abstract class AbstractPageComponent<T> implements AfterViewInit, OnInit,
    * Sanitize the configuration, e.g. set default values or convert
    * properties.
    */
-  protected sanitizeConfig() {}
+  protected sanitizeConfig(): void {}
+
+  /**
+   * Sanitize the hint configuration.
+   */
+  protected sanitizeHintsConfig(): void {
+    const hints: PageHintConfig[] = _.get(this.config, 'hints', []) as PageHintConfig[];
+    _.forEach(hints, (hintConfig: PageHintConfig) => {
+      _.defaultsDeep(hintConfig, {
+        type: 'info',
+        dismissible: false
+      });
+    });
+  }
 
   /**
    * A callback method that is invoked immediately after the observable
    * of the matrix parameters scoped to this route have been resolved.
    */
-  protected onRouteParams() {}
+  protected onPageInit(): void {}
 
   /**
-   * Format the given configuration properties.
-   *
-   * @param paths The paths of the properties to format.
+   * Format the given configuration properties using the page context.
+   * @param props The list of tokenized properties to format.
    */
-  protected formatConfig(paths: Array<string>) {
-    _.forEach(paths, (path) => {
-      const value = _.get(this.config as Record<string, any>, path);
+  protected formatConfig(props: Array<string>): void {
+    _.forEach(props, (prop) => {
+      const value = _.get(this.config as Record<string, any>, prop);
       if (isFormatable(value)) {
-        _.set(this.config as Record<string, any>, path, formatDeep(value, this.pageContext));
+        _.set(this.config as Record<string, any>, prop, formatDeep(value, this.pageContext));
       }
     });
   }

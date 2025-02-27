@@ -3,7 +3,7 @@
  *
  * @license   http://www.gnu.org/licenses/gpl.html GPL Version 3
  * @author    Volker Theile <volker.theile@openmediavault.org>
- * @copyright Copyright (c) 2009-2022 Volker Theile
+ * @copyright Copyright (c) 2009-2025 Volker Theile
  *
  * OpenMediaVault is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,12 +16,11 @@
  * GNU General Public License for more details.
  */
 import { Component, Inject } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
 import * as _ from 'lodash';
 
 import { AbstractPageComponent } from '~/app/core/components/intuition/abstract-page-component';
 import { TabsPageConfig } from '~/app/core/components/intuition/models/tabs-page-config.type';
-import { AuthSessionService } from '~/app/shared/services/auth-session.service';
+import { PageContextService } from '~/app/core/services/page-context.service';
 
 /**
  * This component will render a page containing tabs.
@@ -29,17 +28,15 @@ import { AuthSessionService } from '~/app/shared/services/auth-session.service';
 @Component({
   selector: 'omv-intuition-tabs-page',
   templateUrl: './tabs-page.component.html',
-  styleUrls: ['./tabs-page.component.scss']
+  styleUrls: ['./tabs-page.component.scss'],
+  providers: [PageContextService]
 })
 export class TabsPageComponent extends AbstractPageComponent<TabsPageConfig> {
-  constructor(
-    @Inject(ActivatedRoute) activatedRoute,
-    @Inject(AuthSessionService) authSessionService: AuthSessionService
-  ) {
-    super(activatedRoute, authSessionService);
+  constructor(@Inject(PageContextService) pageContextService: PageContextService) {
+    super(pageContextService);
   }
 
-  protected sanitizeConfig() {
+  protected override sanitizeConfig() {
     _.defaultsDeep(this.config, {
       singleRoute: true,
       tabs: []

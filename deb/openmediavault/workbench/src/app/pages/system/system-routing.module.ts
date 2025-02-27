@@ -1,6 +1,6 @@
 import { NgModule } from '@angular/core';
 import { RouterModule, ROUTES, Routes } from '@angular/router';
-import { marker as gettext } from '@biesbjerg/ngx-translate-extract-marker';
+import { marker as gettext } from '@ngneat/transloco-keys-manager/marker';
 
 import { NavigationPageComponent } from '~/app/core/pages/navigation-page/navigation-page.component';
 import { RouteConfigService } from '~/app/core/services/route-config.service';
@@ -22,9 +22,12 @@ import { PluginsDatatablePageComponent } from '~/app/pages/system/plugins/plugin
 import { PowermgmtSettingsFormPageComponent } from '~/app/pages/system/powermgmt/powermgmt-settings-form-page.component';
 import { PowermgmtTaskDatatablePageComponent } from '~/app/pages/system/powermgmt/powermgmt-task-datatable-page.component';
 import { PowermgmtTaskFormPageComponent } from '~/app/pages/system/powermgmt/powermgmt-task-form-page.component';
+import { UpdateChangelogTextPageComponent } from '~/app/pages/system/updates/update-changelog-text-page.component';
 import { UpdateDatatablePageComponent } from '~/app/pages/system/updates/update-datatable-page.component';
-import { UpdateSettingsFormPageComponent } from '~/app/pages/system/updates/update-settings-form-page.component';
+import { UpdateSettingsSoftwareFormPageComponent } from '~/app/pages/system/updates/update-settings-software-form-page.component';
+import { UpdateSettingsUpdatesFormPageComponent } from '~/app/pages/system/updates/update-settings-updates-form-page.component';
 import { WorkbenchFormPageComponent } from '~/app/pages/system/workbench/workbench-form-page.component';
+import { IsDirtyGuardService } from '~/app/shared/services/is-dirty-guard.service';
 
 const routes: Routes = [
   {
@@ -34,6 +37,7 @@ const routes: Routes = [
   {
     path: 'workbench',
     component: WorkbenchFormPageComponent,
+    canDeactivate: [IsDirtyGuardService],
     data: {
       title: gettext('Workbench'),
       notificationTitle: gettext('Updated workbench settings.'),
@@ -56,6 +60,7 @@ const routes: Routes = [
           {
             path: 'create',
             component: SslCertificateFormPageComponent,
+            canDeactivate: [IsDirtyGuardService],
             data: {
               title: gettext('Create'),
               notificationTitle: gettext('Created SSL certificate.')
@@ -69,6 +74,7 @@ const routes: Routes = [
           {
             path: 'import',
             component: SslCertificateImportFormPageComponent,
+            canDeactivate: [IsDirtyGuardService],
             data: {
               title: gettext('Import'),
               notificationTitle: gettext('Imported SSL certificate.')
@@ -84,6 +90,7 @@ const routes: Routes = [
           {
             path: 'create',
             component: SshCertificateCreateFormPageComponent,
+            canDeactivate: [IsDirtyGuardService],
             data: {
               title: gettext('Create'),
               notificationTitle: gettext('Created SSH certificate.')
@@ -92,6 +99,7 @@ const routes: Routes = [
           {
             path: 'edit/:uuid',
             component: SshCertificateEditFormPageComponent,
+            canDeactivate: [IsDirtyGuardService],
             data: {
               title: gettext('Edit'),
               notificationTitle: gettext('Updated SSH certificate.'),
@@ -101,6 +109,7 @@ const routes: Routes = [
           {
             path: 'import',
             component: SshCertificateImportFormPageComponent,
+            canDeactivate: [IsDirtyGuardService],
             data: {
               title: gettext('Import'),
               notificationTitle: gettext('Imported SSH certificate.')
@@ -113,6 +122,7 @@ const routes: Routes = [
   {
     path: 'monitoring',
     component: MonitoringFormPageComponent,
+    canDeactivate: [IsDirtyGuardService],
     data: {
       title: gettext('Monitoring'),
       notificationTitle: gettext('Updated monitoring settings.'),
@@ -130,6 +140,7 @@ const routes: Routes = [
       {
         path: 'settings',
         component: NotificationSettingsFormPageComponent,
+        canDeactivate: [IsDirtyGuardService],
         data: {
           title: gettext('Settings'),
           notificationTitle: gettext('Updated notification settings.'),
@@ -137,11 +148,12 @@ const routes: Routes = [
         }
       },
       {
-        path: 'notifications',
+        path: 'events',
         component: NotificationSelectionListPageComponent,
+        canDeactivate: [IsDirtyGuardService],
         data: {
-          title: gettext('Notifications'),
-          notificationTitle: gettext('Updated notification settings.')
+          title: gettext('Events'),
+          notificationTitle: gettext('Updated notification event settings.')
         }
       }
     ]
@@ -149,6 +161,7 @@ const routes: Routes = [
   {
     path: 'date-time',
     component: DateTimeFormPageComponent,
+    canDeactivate: [IsDirtyGuardService],
     data: {
       title: gettext('Date & Time'),
       notificationTitle: gettext('Updated date & time settings.'),
@@ -166,6 +179,7 @@ const routes: Routes = [
       {
         path: 'settings',
         component: PowermgmtSettingsFormPageComponent,
+        canDeactivate: [IsDirtyGuardService],
         data: {
           title: gettext('Settings'),
           notificationTitle: gettext('Updated power management settings.'),
@@ -180,6 +194,7 @@ const routes: Routes = [
           {
             path: 'create',
             component: PowermgmtTaskFormPageComponent,
+            canDeactivate: [IsDirtyGuardService],
             data: {
               title: gettext('Create'),
               notificationTitle: gettext('Created scheduled task.'),
@@ -189,6 +204,7 @@ const routes: Routes = [
           {
             path: 'edit/:uuid',
             component: PowermgmtTaskFormPageComponent,
+            canDeactivate: [IsDirtyGuardService],
             data: {
               title: gettext('Edit'),
               notificationTitle: gettext('Updated scheduled task.'),
@@ -207,6 +223,7 @@ const routes: Routes = [
       {
         path: 'create',
         component: CronTaskFormPageComponent,
+        canDeactivate: [IsDirtyGuardService],
         data: {
           title: gettext('Create'),
           editing: false,
@@ -216,6 +233,7 @@ const routes: Routes = [
       {
         path: 'edit/:uuid',
         component: CronTaskFormPageComponent,
+        canDeactivate: [IsDirtyGuardService],
         data: {
           title: gettext('Edit'),
           editing: true,
@@ -234,17 +252,45 @@ const routes: Routes = [
       },
       {
         path: 'updates',
-        component: UpdateDatatablePageComponent,
-        data: { title: gettext('Updates') }
+        data: { title: gettext('Updates') },
+        children: [
+          { path: '', component: UpdateDatatablePageComponent },
+          {
+            path: 'changelog/:filename',
+            component: UpdateChangelogTextPageComponent,
+            data: { title: gettext('Changelog') }
+          }
+        ]
       },
       {
         path: 'settings',
-        component: UpdateSettingsFormPageComponent,
-        data: {
-          title: gettext('Settings'),
-          notificationTitle: gettext('Updated update management settings.'),
-          editing: true
-        }
+        data: { title: gettext('Settings') },
+        children: [
+          {
+            path: '',
+            component: NavigationPageComponent
+          },
+          {
+            path: 'software',
+            component: UpdateSettingsSoftwareFormPageComponent,
+            canDeactivate: [IsDirtyGuardService],
+            data: {
+              title: gettext('Software'),
+              notificationTitle: gettext('Updated update management settings.'),
+              editing: true
+            }
+          },
+          {
+            path: 'updates',
+            component: UpdateSettingsUpdatesFormPageComponent,
+            canDeactivate: [IsDirtyGuardService],
+            data: {
+              title: gettext('Updates'),
+              notificationTitle: gettext('Updated update management settings.'),
+              editing: true
+            }
+          }
+        ]
       }
     ]
   },

@@ -1,7 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { NgModule } from '@angular/core';
-import { FlexLayoutModule } from '@angular/flex-layout';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslocoModule } from '@ngneat/transloco';
 
 import { CoreModule } from '~/app/core/core.module';
 import { MaterialModule } from '~/app/material.module';
@@ -24,8 +23,10 @@ import { PowermgmtSettingsFormPageComponent } from '~/app/pages/system/powermgmt
 import { PowermgmtTaskDatatablePageComponent } from '~/app/pages/system/powermgmt/powermgmt-task-datatable-page.component';
 import { PowermgmtTaskFormPageComponent } from '~/app/pages/system/powermgmt/powermgmt-task-form-page.component';
 import { SystemRoutingModule } from '~/app/pages/system/system-routing.module';
+import { UpdateChangelogTextPageComponent } from '~/app/pages/system/updates/update-changelog-text-page.component';
 import { UpdateDatatablePageComponent } from '~/app/pages/system/updates/update-datatable-page.component';
-import { UpdateSettingsFormPageComponent } from '~/app/pages/system/updates/update-settings-form-page.component';
+import { UpdateSettingsSoftwareFormPageComponent } from '~/app/pages/system/updates/update-settings-software-form-page.component';
+import { UpdateSettingsUpdatesFormPageComponent } from '~/app/pages/system/updates/update-settings-updates-form-page.component';
 import { WorkbenchFormPageComponent } from '~/app/pages/system/workbench/workbench-form-page.component';
 import { SharedModule } from '~/app/shared/shared.module';
 
@@ -45,8 +46,10 @@ import { SharedModule } from '~/app/shared/shared.module';
     NotificationSettingsFormPageComponent,
     NotificationSelectionListPageComponent,
     UpdateDatatablePageComponent,
+    UpdateChangelogTextPageComponent,
     PluginsDatatablePageComponent,
-    UpdateSettingsFormPageComponent,
+    UpdateSettingsSoftwareFormPageComponent,
+    UpdateSettingsUpdatesFormPageComponent,
     PowermgmtSettingsFormPageComponent,
     PowermgmtTaskDatatablePageComponent,
     PowermgmtTaskFormPageComponent,
@@ -56,11 +59,10 @@ import { SharedModule } from '~/app/shared/shared.module';
   imports: [
     CommonModule,
     CoreModule,
-    FlexLayoutModule,
     MaterialModule,
     SharedModule,
     SystemRoutingModule,
-    TranslateModule.forChild()
+    TranslocoModule
   ]
 })
 export class SystemModule {}
